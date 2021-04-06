@@ -14,8 +14,6 @@ class ContactListFragment:Fragment() {
     lateinit var listener : ContactListFragmentListener
     private val adapter = ContactAdapter()
 
-
-
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -28,7 +26,6 @@ class ContactListFragment:Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         val contentRecyclerView = view.findViewById<RecyclerView>(R.id.content_recyclerView)
-        //val adapter = ContactAdapter()
         adapter.contactList = contactList
         contentRecyclerView.adapter = adapter
         contentRecyclerView.layoutManager = LinearLayoutManager(context)

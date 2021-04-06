@@ -1,16 +1,15 @@
 package ruzanna.game.contacts
 
-import android.annotation.SuppressLint
+import android.app.ProgressDialog
 import android.database.Cursor
-import android.os.Build
 import android.os.Bundle
 import android.provider.CallLog
 import android.provider.ContactsContract
-import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.lang.Long
 import java.util.*
 
@@ -24,21 +23,29 @@ class MainActivity : AppCompatActivity(), ContactListFragment.ContactListFragmen
     private val contactInfoFragment = ContactInfoFragment()
     private lateinit var contactDeleteFragment: ContactDeleteFragment
 
-    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        if (contactList.isEmpty()) {
-            contactList = getContactList()
+        GlobalScope.launch (Dispatchers.Main){
+            val progressDialog = ProgressDialog(this@MainActivity)
+            progressDialog.setTitle("Contacts loading...")
+            progressDialog.show()
+
+
+            if (contactList.isEmpty()) {
+                contactList = withContext(Dispatchers.Default){getContactList()}
+            }
+            contactListFragment.contactList = contactList
+            contactListFragment.listener = this@MainActivity
+            progressDialog.dismiss()
+            supportFragmentManager.beginTransaction().add(R.id.container, contactListFragment)
+                .commit()
         }
-        contactListFragment.contactList = contactList
-        contactListFragment.listener = this
-        supportFragmentManager.beginTransaction().add(R.id.container, contactListFragment).commit()
         if(callDetailsMap.isEmpty()){
             callDetailsMap = getCallDetails()
         }
     }
-    @RequiresApi(Build.VERSION_CODES.O)
+
     private fun getContactList(): MutableList<Contact> {
         val contacts = mutableListOf<Contact>()
         val cr = contentResolver
@@ -46,42 +53,65 @@ class MainActivity : AppCompatActivity(), ContactListFragment.ContactListFragmen
                 null, null, null, null)
         if ((cur?.count ?: 0) > 0) {
             while (cur != null && cur.moveToNext()) {
-                val id: String = cur.getString(
-                        cur.getColumnIndex(ContactsContract.Contacts._ID))
-                val name: String = cur.getString(cur.getColumnIndex(
-                        ContactsContract.Contacts.DISPLAY_NAME))
-                val icon: String? = cur.getString(cur.getColumnIndex(
-                    ContactsContract.Contacts.PHOTO_THUMBNAIL_URI))
-                val rawContactId: String? = getRawContactId(id)
-                val companyName: String? = rawContactId?.let { getCompanyName(it) }
-                val contItem = Contact(name, mutableListOf(), companyName, icon)
-                if (cur.getInt(cur.getColumnIndex(
-                                ContactsContract.Contacts.HAS_PHONE_NUMBER)) > 0) {
-                    val pCur: Cursor? = cr.query(
-                            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                            null,
-                            ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?", arrayOf(id), null)
-                    while (pCur!!.moveToNext()) {
-                        val phoneNo: String = pCur.getString(pCur.getColumnIndex(
-                                ContactsContract.CommonDataKinds.Phone.NUMBER))
-                        val phoneNoTyp: String = pCur.getString(pCur.getColumnIndex(
-                            ContactsContract.CommonDataKinds.Phone.TYPE))
-                        val d = when(phoneNoTyp){
-                            "3" ->"HOME"
-                            "2"->"MOBILE"
-                            else -> "OTHER"
+                        val id: String = cur.getString(
+                            cur.getColumnIndex(ContactsContract.Contacts._ID)
+                        )
+                        val name: String = cur.getString(
+                            cur.getColumnIndex(
+                                ContactsContract.Contacts.DISPLAY_NAME
+                            )
+                        )
+                        val icon: String? = cur.getString(
+                            cur.getColumnIndex(
+                                ContactsContract.Contacts.PHOTO_THUMBNAIL_URI
+                            )
+                        )
+                        val rawContactId: String? = getRawContactId(id)
+                        val companyName: String? = rawContactId?.let { getCompanyName(it) }
+                        val contItem = Contact(name, mutableListOf(), companyName, icon)
+                        if (cur.getInt(
+                                cur.getColumnIndex(
+                                    ContactsContract.Contacts.HAS_PHONE_NUMBER
+                                )
+                            ) > 0
+                        ) {
+                            val pCur: Cursor? = cr.query(
+                                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                                null,
+                                ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
+                                arrayOf(id),
+                                null
+                            )
+                            while (pCur!!.moveToNext()) {
+                                val phoneNo: String = pCur.getString(
+                                    pCur.getColumnIndex(
+                                        ContactsContract.CommonDataKinds.Phone.NUMBER
+                                    )
+                                )
+                                val phoneNoTyp: String = pCur.getString(
+                                    pCur.getColumnIndex(
+                                        ContactsContract.CommonDataKinds.Phone.TYPE
+                                    )
+                                )
+                                val d = when (phoneNoTyp) {
+                                    "3" -> "HOME"
+                                    "2" -> "MOBILE"
+                                    else -> "OTHER"
+                                }
+                                contItem.phoneNumbes.add(PhoneNumber(phoneNo, d))
+                            }
+                            pCur.close()
                         }
-                        contItem.phoneNumbes.add(PhoneNumber(phoneNo, d))
-                    }
-                    pCur.close()
-                }
-                contacts.add(contItem)
+
+
+                        contacts.add(contItem)
+                  
             }
         }
         cur?.close()
         return contacts
     }
-    @SuppressLint("Recycle")
+
     private fun getCompanyName(rawContactId: String): String? {
         return try {
             val orgWhere =
@@ -107,7 +137,7 @@ class MainActivity : AppCompatActivity(), ContactListFragment.ContactListFragmen
             null
         }
     }
-    @SuppressLint("Recycle")
+
     private fun getRawContactId(contactId: String): String? {
         val projection =
             arrayOf(ContactsContract.RawContacts._ID)
